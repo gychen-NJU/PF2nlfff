@@ -1,5 +1,5 @@
-from packages import *
-from mf_module import *
+from PF2nlfff.packages import *
+from PF2nlfff.mf_module import *
 # ===================================================================== #
 #               loss for the discriminator                #
 # ===================================================================== #
