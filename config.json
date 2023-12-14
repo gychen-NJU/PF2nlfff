@@ -25,5 +25,26 @@
             "data_name": "nlfff_data.npy",
             "pic": "nlfff_opt_pic.png"
         }
+    },
+    "picnn": {
+        "existed_net": "../UNet3D.pkl",
+        "PF_file": "../Test/LL_PF.npy",
+        "boundary_file": null,
+        "L_bc": 10000.0,
+        "L_ff": 1.0,
+        "L_div": 10.0,
+        "print_epoch": 10,
+        "save_epoch": 100,
+        "use_mf": true,
+        "lr": 0.001,
+        "step_size": 40,
+        "gamma": 0.99,
+        "nepoch": 1000,
+        "is_save_vtr": true,
+        "is_plot_loss": true,
+        "loss_pic_name": "Loss.png",
+        "nlfff_pred_data": "pred.npy",
+        "vtr_file": "pred_vtr",
+        "lb_ub": "auto"
     }
 }
