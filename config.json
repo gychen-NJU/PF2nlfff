@@ -1,0 +1,29 @@
+{
+    "extrapolation": {
+        "potential_field": {
+            "boundary_file": "../Test/boundary.npy",
+            "nz": "auto",
+            "is_save_vtr": true,
+            "PF_exist": false,
+            "PF_file": null
+        },
+        "nlfff": {
+            "nlfff_extrapolation": true,
+            "max_step": 1000,
+            "device": "auto",
+            "dt": 0.0001,
+            "mu": 1.0
+        }
+    },
+    "files": {
+        "PF_files": {
+            "data_name": "PF_data.npy",
+            "vtr_name": "PF_data",
+            "lb_ub": "auto"
+        },
+        "nlfff": {
+            "data_name": "nlfff_data.npy",
+            "pic": "nlfff_opt_pic.png"
+        }
+    }
+}
