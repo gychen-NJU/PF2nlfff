@@ -45,7 +45,7 @@ LR = config_data["picnn"]["lr"]
 step_size = config_data["picnn"]["step_size"]
 gamma=config_data["picnn"]["gamma"]
 nepoch = config_data["picnn"]["nepoch"]
-model.train(5001, lr=LR, Delta=step_size, gamma=gamma)
+model.train(nepoch, lr=LR, Delta=step_size, gamma=gamma)
 print("!!! Finish Training !!!")
 
 is_plot_loss = config_data["picnn"]["is_plot_loss"]
