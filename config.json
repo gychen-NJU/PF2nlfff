@@ -1,7 +1,7 @@
 {
     "extrapolation": {
         "potential_field": {
-            "boundary_file": "../Test/boundary.npy",
+            "boundary_file": "../examples/boundary.npy",
             "nz": "auto",
             "is_save_vtr": true,
             "PF_exist": false,
@@ -28,7 +28,7 @@
     },
     "picnn": {
         "existed_net": "../UNet3D.pkl",
-        "PF_file": "../Test/LL_PF.npy",
+        "PF_file": "../examples/LL_PF.npy",
         "boundary_file": null,
         "L_bc": 10000.0,
         "L_ff": 1.0,
