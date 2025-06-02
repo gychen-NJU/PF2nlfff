@@ -1,5 +1,5 @@
 from PF2nlfff.packages import *
-from PF2nlfff.mf_module import *
+from PF2nlfff.nlfff_module import *
 from PF2nlfff.Loss_function import *
 from PF2nlfff.tools import *
 
@@ -319,7 +319,8 @@ class GAN_model():
             if self.is_cut:
                 x_cut = np.random.randint(nlfff.shape[1]-self.cut_size-1)
                 y_cut = np.random.randint(nlfff.shape[2]-self.cut_size-1)
-                z_cut = np.random.randint(nlfff.shape[3]-self.cut_size-1)
+                # z_cut = np.random.randint(nlfff.shape[3]-self.cut_size-1)
+                z_cut = 0
                 nlfff_data.append(nlfff[:,x_cut:x_cut+self.cut_size,y_cut:y_cut+self.cut_size,z_cut:z_cut+self.cut_size])
                 PF_data.append(potential[:,x_cut:x_cut+self.cut_size,y_cut:y_cut+self.cut_size,z_cut:z_cut+self.cut_size])
             else:
@@ -331,7 +332,17 @@ class GAN_model():
         PF_tensor = torch.from_numpy(PF_data).float().to(self.in_device)
         return nlfff_tensor, PF_tensor
     
-    def train(self, epoch=100, lr=1e-3, Delta=500, gamma=0.9, is_plot = False, batch_epoch=100):
+    def train(self, epoch=100, lr=1e-3, Delta=500, gamma=0.9, is_plot = False, batch_epoch=100, **kwargs):
+        ipt         = kwargs.get('ipt', None)
+        opt         = kwargs.get('opt', None)
+        save_best   = kwargs.get('save_best', False)
+        save_first  = kwargs.get('save_first', False)
+        save_path   = kwargs.get('save_path', self.save_models_dir)
+        batch_size  = kwargs.get('batch_size', self.batch_size)
+        if (ipt is None) or (opt is None):
+            ipt,opt = self.return_io()
+        total_batch = ipt.shape[0]
+        self.save_models_dir = save_path
         
         if self.iter ==0:
             self.wall_time = 0.
@@ -350,85 +361,76 @@ class GAN_model():
         self.scheduler_G.step_size = Delta
         self.scheduler_D.step_size = Delta
         
+        print(f'### Start to train the GAN model [batch_size:total_batch={batch_size}/{total_batch}] ###')
         for iepoch in range(epoch):
-            if self.iter%batch_epoch==0 or first:
-                real_B, real_A = self.generate_latent(nums=self.batch_size)
-            fake_B = self.netG(real_A).to(self.in_device)
-            # update D
-            self.set_requires_grad(self.netD, True)  # enable backprop for D
-            self.optimizer_D.zero_grad()     # set D's gradients to zero
-            self.backward_D(real_A, real_B, fake_B)                # calculate gradients for D
-            self.optimizer_D.step()          # update D's weights
-            self.scheduler_D.step()
-            # update G
-            self.set_requires_grad(self.netD, False)  # D requires no gradients when optimizing G
-            self.optimizer_G.zero_grad()        # set G's gradients to zero
-            self.backward_G(real_A, real_B, fake_B)                   # calculate graidents for G
-            self.optimizer_G.step()             # update G's weights
-            self.scheduler_G.step()
-
+            idx = np.random.choice(total_batch, total_batch, replace=False)
+            ipt_new = ipt[idx]
+            opt_new = opt[idx]
+            nrounds = int(np.ceil(total_batch/batch_size))
+            iloss_D = []
+            iloss_G = []
+            for iround in range(nrounds):
+                hi = iround*batch_size
+                ti = hi+batch_size
+                real_A = torch.from_numpy(ipt_new[hi:ti]).float().to(self.device)
+                real_B = torch.from_numpy(opt_new[hi:ti]).float().to(self.device)
+                fake_B = self.netG(real_A)
+                self.set_requires_grad(self.netD, True)
+                # update D
+                self.set_requires_grad(self.netD, True)  # enable backprop for D
+                self.optimizer_D.zero_grad()     # set D's gradients to zero
+                self.backward_D(real_A, real_B, fake_B)                # calculate gradients for D
+                self.optimizer_D.step()          # update D's weights
+                self.scheduler_D.step()
+                # update G
+                self.set_requires_grad(self.netD, False)  # D requires no gradients when optimizing G
+                self.optimizer_G.zero_grad()        # set G's gradients to zero
+                self.backward_G(real_A, real_B, fake_B)                   # calculate graidents for G
+                self.optimizer_G.step()             # update G's weights
+                self.scheduler_G.step()
+                iloss_D.append(self.loss_D.item())
+                iloss_G.append(self.loss_G.item())
+                self.iter+=1
+            self.Gloss_list.append(np.mean(iloss_G))
+            self.Dloss_list.append(np.mean(iloss_D))
             # print training information
-            if self.iter % self.print_epoch ==0 or first:
+            if iepoch % self.print_epoch == 0 or first or iepoch+1==epoch:
                 time_now = time.time()
                 time_used = time_now-start_time+self.wall_time
                 print(
                 'Iter %05d, Loss_G: %.3e, Loss_D: %.3e, wall_time: %.3e sec, lr: %.3e' % \
-                    (self.iter, self.Gloss_list[-1], self.Dloss_list[-1], time_used, 
+                    (iepoch, self.Gloss_list[-1], self.Dloss_list[-1], time_used, 
                      self.scheduler_G.get_last_lr()[-1])
                 )
-            first = False
             
-            if self.iter % self.save_epoch ==0:
+            if iepoch % self.save_epoch == 0:
                 if not os.path.exists(self.save_models_dir):
                     os.makedirs(self.save_models_dir, exist_ok=True)
                     print('create the DIR. : %s' % self.save_models_dir)
-                torch.save(self, self.save_models_dir+'PF2nlfff_%05d.pkl' % self.iter)
-            if self.loss_G<=np.min(self.Gloss_list) and self.iter >= 100:
-                torch.save(self, self.save_models_dir+'best_model.pkl')   
-            
-            # plotting
-            if is_plot:
-                if self.iter % self.plot_epoch ==0 and self.iter>=1:
-                    time_now = time.time()
-                    time_used = time_now-start_time+self.wall_time
-                    clear_output(wait=True)
-                    plt.figure(figsize=(10, 6.18))
-                    ax1 = plt.subplot(111)
-
-                    ax1.plot(self.loss_list[-500:])
-                    ax1.set_yscale('log')
-                    ax1.set_ylabel('loss')
-                    ax1.set_title(
-                        'Iter %05d, Loss_G: %.3e,Loss_D: %.3e, wall_time: %.3e sec, lr: %.3e' % \
-                            (self.iter, self.Gloss_list[-1], self.Dloss_list[-1], time_used, 
-                             self.scheduler_G.get_last_lr()[-1])
-                    )
-
-                    if self.iter % self.plot_epoch==0:
-                        if not os.path.exists( self.save_pics_dir):
-                            os.makedirs( self.save_pics_dir, exist_ok=True)
-                            print('create the DIR. : %s' % self.save_pics_dir)
-                        plt.savefig(self.save_pics_dir+'loss_%05d.png' % self.iter,
-                                    dpi=200, bbox_inches ="tight")
-                    plt.draw()
-                    plt.pause(0.01)
-            
-            self.iter+=1
+                if iepoch==0 and save_first:
+                    torch.save(self, os.path.join(self.save_models_dir,'PF2nlfff_%05d.pkl' % iepoch))
+                else:
+                    torch.save(self, os.path.join(self.save_models_dir,'PF2nlfff_%05d.pkl' % iepoch))
+            if len(self.Gloss_list)>1 and self.Gloss_list[-1]<=np.min(self.Gloss_list[:-1]) and self.iter >= 100:
+                best_netG = copy.deepcopy(self.netG)
+            first=False
             
         end_time = time.time()
         time_used = end_time-start_time
-        self.wall_time += time_used        
-
+        self.wall_time += time_used
+        torch.save(self, os.path.join(self.save_models_dir,'last_epoch.pkl'))
+        if save_best:
+            torch.save(best_netG, os.path.join(self.save_models_dir, 'best_netG.pkl'))
 
 # ===================================================== #
-#              Physics informed 3D CNN                  #
+#               Physics-reinforced GAN                  #
 # ===================================================== #
 class PICNN():
-    def __init__(self, PF_data, net=None):
+    def __init__(self, PF_data, net=None, **kwargs):
         
         self.PF_data = PF_data
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.net = (UNet3D().to(self.device) if net==None else net.to(self.device))
+        self.device = kwargs.get('device',torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+        self.net = (UNet3D().to(self.device) if net==None else net)
         self.loss_func = nn.MSELoss()
         
         self.iter = 0
@@ -442,6 +444,7 @@ class PICNN():
         self.L_bc = 1.e5
         self.L_sJ = 1.e2
         self.L_fi = 1.e5
+        self.L_lf = 1.e3
         
         self.print_epoch = 10
         self.save_epoch = 100
@@ -453,7 +456,12 @@ class PICNN():
         self.save_models_dir = './trainer/3D_models/'
         self.save_pics_dir = './trainer/3D_pics/'   
         
-    def train(self, epoch=100, lr=1e-3, Delta=100, gamma=0.9):
+    def train(self, epoch=100, lr=1e-3, Delta=100, gamma=0.9, **kwargs):
+        save_best            = kwargs.get('save_best',True)
+        save_first           = kwargs.get('save_first', True)
+        mf_dt                = kwargs.get('mf_dt', 1.e-5)
+        self.save_models_dir = kwargs.get('save_models_dir', self.save_models_dir)
+        save_model_name      = kwargs.get('save_model_name', 'PICNN')
         
         if self.iter == 0:
             self.wall_time = 0.
@@ -474,13 +482,14 @@ class PICNN():
         for iepoch in range(epoch):
             # update network
             bcube = self.net(PF_tensor)[0]
-            fi, sJ, L0 = evaluate(bcube)
-            ff, div, self.sigma_J, self.fi = EQLoss(bcube)
+            fi, sJ, L0 = evaluate(bcube, is_eval=True)
+            ff, div, self.sigma_J, self.fi, loss_lf = EQLoss(bcube)
+            loss_lf = self.L_lf*loss_lf
             self.loss_div = self.L_div*div
             self.loss_ff = self.L_ff*ff
             self.loss_bc = self.L_bc*self.loss_func(boundary,bcube[:,:,:,0:1])
             self.optimizer.zero_grad()
-            self.loss = self.loss_div+self.loss_ff+self.loss_bc+self.L_fi*self.fi+self.L_sJ*self.sigma_J
+            self.loss = self.loss_div+self.loss_ff+self.loss_bc+self.L_fi*self.fi+self.L_sJ*self.sigma_J+loss_lf
             self.loss.backward()
             self.loss_list.append(self.loss.item())
             self.fi_list.append(fi)
@@ -491,37 +500,46 @@ class PICNN():
             
             if self._use_mf:
                 bcube = self.net(PF_tensor)[0]
-                mf_result = use_mf(bcube)().to(self.device)
+                # print('bcube size:', bcube.size())
+                # print('PF size   :', PF_tensor.size())
+                bcube[:,:,:,0] = PF_tensor[0,:,:,:,0].to(self.device)
+                mf_result = use_opt(bcube, boundary[:,:,:,0], dt=mf_dt)(is_print=False).to(self.device)
                 L1 = evaluate(mf_result)[2]
-                if L1<L0:
-                    self.optimizer.zero_grad()
-                    loss = self.loss_func(bcube,mf_result)
-                    loss.backward()
-                    self.optimizer.step()
-                    self.scheduler.step()
+                # if L1<L0:
+                self.optimizer.zero_grad()
+                loss = self.loss_func(bcube,mf_result)
+                loss.backward()
+                self.optimizer.step()
+                # self.scheduler.step()
 
             # print training information
             if self.iter % self.print_epoch ==0 or first:
                 time_now = time.time()
                 time_used = time_now-start_time+self.wall_time
                 print(
-                'Iter %05d, Loss: %.3e, Loss_div: %.3e,Loss_ff: %.3e, Loss_bc: %.3e, wall_time: %.3e sec, lr: %.3e' % \
-                    (self.iter, self.loss_list[-1], self.loss_div, self.loss_ff, self.loss_bc, time_used, 
+                'Iter %05d, Loss: %.3e, Loss_div: %.3e,Loss_ff: %.3e, Loss_bc: %.3e, Loss_lf: %.3e, wall_time: %.3e sec, lr: %.3e' % \
+                    (self.iter, self.loss_list[-1], self.loss_div, self.loss_ff, self.loss_bc, loss_lf, time_used, 
                      self.scheduler.get_last_lr()[-1])
                 )
             
-            if self.iter % self.save_epoch ==0 or first:
+            if self.iter % self.save_epoch == 0 or first:
                 if not os.path.exists( self.save_models_dir):
                     os.makedirs( self.save_models_dir)
                     print('create the DIR. : %s' % self.save_models_dir)
-                torch.save(self, self.save_models_dir+'PICNN_%05d.pkl' % self.iter)
-            if self.loss_list != []:
+                if (self.iter == 0) and save_first:
+                    torch.save(self, os.path.join(self.save_models_dir,save_model_name+'_%05d.pkl') % self.iter)
+                elif (self.iter !=0):
+                    torch.save(self, os.path.join(self.save_models_dir,save_model_name+'_%05d.pkl') % self.iter)
+                else:
+                    None
+            if save_best and self.loss_list != []:
                 if self.loss_list[-1]<=np.min(self.loss_list):
-                    torch.save(self,self.save_models_dir+'best_model.pkl')
+                    torch.save(self,os.path.join(self.save_models_dir,'best_model.pkl'))
             
             self.iter+=1
             first = False
             bcube.detach()
             del bcube
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
         self.wall_time = time_used
+        torch.save(self, os.path.join(self.save_models_dir,save_model_name+'_%05d.pkl') % self.iter)
