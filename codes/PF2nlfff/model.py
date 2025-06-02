@@ -1,7 +1,7 @@
-from PF2nlfff.packages import *
-from PF2nlfff.mf_module import *
-from PF2nlfff.Loss_function import *
-from PF2nlfff.tools import *
+from packages import *
+from mf_module import *
+from Loss_function import *
+from tools import *
 
 # ========================================================== #
 #             U-Net generator                  #

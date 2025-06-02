@@ -103,9 +103,12 @@ def read_nlfff_boundary(filename):
         By = np.fromfile(file, dtype='float64', count=nx1 * nx2)  
         Bz = np.fromfile(file, dtype='float64', count=nx1 * nx2)  
 
-    Bx = Bx.reshape(nx1, nx2)  
-    By = By.reshape(nx1, nx2)  
-    Bz = Bz.reshape(nx1, nx2)  
+    # Bx = Bx.reshape(nx1, nx2)  
+    # By = By.reshape(nx1, nx2)  
+    # Bz = Bz.reshape(nx1, nx2)
+    Bx = Bx.reshape(nx2, nx1).T  
+    By = By.reshape(nx2, nx1).T  
+    Bz = Bz.reshape(nx2, nx1).T  
     
     return np.stack([Bx,By,Bz])
 
@@ -114,7 +117,7 @@ def read_nlfff_boundary(filename):
 #            import the field to VTR file               #
 # ===================================================== #
 def Bcube2vtr(b_cube, lb_ub = 'auto', savepath = './Bcube'):
-    b_cube = b_cube.transpose(0,2,1,3)
+    # b_cube = b_cube.transpose(0,2,1,3)
     nx, ny, nz = np.array(b_cube.shape[-3:])-1
     if lb_ub == 'auto':
         lb = np.array([0,0,0])
@@ -170,44 +173,44 @@ def Bcube2vtr(b_cube, lb_ub = 'auto', savepath = './Bcube'):
     w.appendData(x).appendData(y).appendData(z)
     w.save()
 
-# # ===================================================== #
-# #            import the training data               #
-# # ===================================================== #
-# product_info_path = os.path.join(script_dir,'archive-202203-info.csv')
-# product_info = pandas.read_csv(product_info_path)
-# def read_bcube(file):
-#     sample_harpnum_trec = re.search(r'\d+\.\d{8}_\d{6}_\w+',file).group()
-#     sample_product_info=product_info[ product_info["harpnum_trec"]==sample_harpnum_trec]
-#     sample_bout_maxlevel=int(sample_product_info["bout_maxlevel"])
+# ===================================================== #
+#            import the training data               #
+# ===================================================== #
+product_info_path = os.path.join(script_dir,'archive-202203-info.csv')
+product_info = pandas.read_csv(product_info_path)
+def read_bcube(file):
+    sample_harpnum_trec = re.search(r'\d+\.\d{8}_\d{6}_\w+',file).group()
+    sample_product_info=product_info[ product_info["harpnum_trec"]==sample_harpnum_trec]
+    sample_bout_maxlevel=int(sample_product_info["bout_maxlevel"])
 
-#     sample_nx=int(sample_product_info["grid_x"])
-#     sample_ny=int(sample_product_info["grid_y"])
-#     sample_nz=int(sample_product_info["grid_z"])
+    sample_nx=int(sample_product_info["grid_x"])
+    sample_ny=int(sample_product_info["grid_y"])
+    sample_nz=int(sample_product_info["grid_z"])
 
-#     sample_identifiers=int(sample_product_info["identifiers"])
+    sample_identifiers=int(sample_product_info["identifiers"])
     
-#     nx=sample_nx
-#     ny=sample_ny
-#     nz=sample_nz
+    nx=sample_nx
+    ny=sample_ny
+    nz=sample_nz
 
-#     np_dtype_str=r"<d"
-#     bin_path=file
+    np_dtype_str=r"<d"
+    bin_path=file
 
-#     # https://numpy.org/doc/stable/reference/generated/numpy.memmap.html
-#     nlfff_data = np.memmap(bin_path,
-#                     dtype=np.dtype(np_dtype_str),
-#                     offset=0,
-#                     shape=(3, nx, ny, nz),
-#                     order='C') 
-#     nlfff_data = np.array(nlfff_data)
+    # https://numpy.org/doc/stable/reference/generated/numpy.memmap.html
+    nlfff_data = np.memmap(bin_path,
+                    dtype=np.dtype(np_dtype_str),
+                    offset=0,
+                    shape=(3, nx, ny, nz),
+                    order='C') 
+    nlfff_data = np.array(nlfff_data)
     
-#     return nlfff_data
+    return nlfff_data
 
-# def get_files_with_path(directory):
-#     file_list = []
-#     for root, dirs, files in os.walk(directory):
-#         for file in files:
-#             if file == "Bout.bin":
-#                 file_path = os.path.join(root, file)
-#                 file_list.append(file_path)
-#     return file_list
+def get_files_with_path(directory):
+    file_list = []
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file == "Bout.bin":
+                file_path = os.path.join(root, file)
+                file_list.append(file_path)
+    return file_list

@@ -8,6 +8,7 @@ import glob
 import pandas as pd
 import argparse
 import json
+import matplotlib
 
 import matplotlib.pyplot as plt
 from matplotlib import cm

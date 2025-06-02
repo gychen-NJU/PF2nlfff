@@ -1,5 +1,5 @@
 from PF2nlfff.packages import *
-from PF2nlfff.mf_module import *
+from PF2nlfff.nlfff_module import *
 # ===================================================================== #
 #               loss for the discriminator                #
 # ===================================================================== #
@@ -73,11 +73,10 @@ class GANLoss(nn.Module):
     
 
 # ===================================================================== #
-#               loss for the equation                   #
+#                         loss for the equation                         #
 # ===================================================================== #    
 def EQLoss(b_cube):
     """Calculate the divb and sigma_J with the finity difference"""
-    """Calculate the loss for the boundary condition"""
     epsilon = 1.e-16
     divB = div(b_cube)
     rotB = rot(b_cube)
@@ -85,10 +84,11 @@ def EQLoss(b_cube):
     B = torch.norm(b_cube, dim=0)
     J = torch.norm(rotB, dim=0)
     F = torch.norm(lorentz_vec, dim=0)
-    f_i, sigma_J, _ = evaluate(b_cube)
+    f_i, sigma_J, _ = evaluate(b_cube, is_eval=True)
     # _.detach().cpu()
     
     loss_ff = (F**2/(B**2+epsilon)).sum()
     loss_div = (divB**2).sum()
+    loss_lf = (F**2).mean()
     
-    return loss_ff, loss_div, sigma_J, f_i
+    return loss_ff, loss_div, sigma_J, f_i,loss_lf

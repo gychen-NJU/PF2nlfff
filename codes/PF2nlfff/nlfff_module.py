@@ -35,7 +35,7 @@ def extrapolate_potential(bottom_boundary, n3='auto', device = 'auto', zscale=1.
         bn = torch.tensor(bottom_boundary[2,:,:]).float().to(device)
         nx, ny = bn.shape
         if n3 == 'auto':
-            nz = (np.ceil(3/8*(nx+ny)/4)*4).long()
+            nz = (np.ceil(3/8*(nx+ny)/4)*4).astype(np.int64) 
         else:
             nz = torch.tensor(n3).long()
         i, j, k = torch.meshgrid(torch.arange(nx), torch.arange(ny), torch.arange(nz))
@@ -54,18 +54,19 @@ def extrapolate_potential(bottom_boundary, n3='auto', device = 'auto', zscale=1.
         bx = torch.zeros(nx, ny, nz).float().to(device)
         by = torch.zeros(nx, ny, nz).float().to(device)
         bz = torch.zeros(nx, ny, nz).float().to(device)
-        bx[1:-1,:,:] = (phi_cube[2:,:,:]-phi_cube[:-2,:,:])/2
-        by[:,1:-1,:] = (phi_cube[:,2:,:]-phi_cube[:,:-2,:])/2
-        bz[:,:,1:-1] = (phi_cube[:,:,2:]-phi_cube[:,:,:-2])/2
-        bx[0,:,:] = phi_cube[1,:,:]-phi_cube[0,:,:]
-        by[:,0,:] = phi_cube[:,1,:]-phi_cube[:,0,:]
-        bz[:,:,0] = phi_cube[:,:,1]-phi_cube[:,:,0]
-        bx[-1,:,:] = phi_cube[-1,:,:]-phi_cube[-2,:,:]
-        by[:,-1,:] = phi_cube[:,-1,:]-phi_cube[:,-2,:]
-        bz[:,:,-1] = phi_cube[:,:,-1]-phi_cube[:,:,-2]
-
-        b_cube = -torch.stack((bx,by,bz), dim=0)
-        b_cube[:,:,:,0] = torch.tensor(bottom_boundary)
+        b_cube = -grad(phi_cube.unsqueeze(0))
+        b_cube[:,:,:,0] = torch.from_numpy(bottom_boundary).to(device)
+        # bx[1:-1,:,:] = (phi_cube[2:,:,:]-phi_cube[:-2,:,:])/2
+        # by[:,1:-1,:] = (phi_cube[:,2:,:]-phi_cube[:,:-2,:])/2
+        # bz[:,:,1:-1] = (phi_cube[:,:,2:]-phi_cube[:,:,:-2])/2
+        # bx[0,:,:] = phi_cube[1,:,:]-phi_cube[0,:,:]
+        # by[:,0,:] = phi_cube[:,1,:]-phi_cube[:,0,:]
+        # bz[:,:,0] = phi_cube[:,:,1]-phi_cube[:,:,0]
+        # bx[-1,:,:] = phi_cube[-1,:,:]-phi_cube[-2,:,:]
+        # by[:,-1,:] = phi_cube[:,-1,:]-phi_cube[:,-2,:]
+        # bz[:,:,-1] = phi_cube[:,:,-1]-phi_cube[:,:,-2]
+        # b_cube = -torch.stack((bx,by,bz), dim=0)
+        # b_cube[:,:,:,0] = torch.tensor(bottom_boundary)
         
     else:
         bn = bottom_boundary[2,:,:]
@@ -124,18 +125,20 @@ def extrapolate_potential(bottom_boundary, n3='auto', device = 'auto', zscale=1.
 # ===================================================== #
 #          NLFFF with the optimizing method             #
 # ===================================================== #
-class use_mf():
-    def __init__(self, b_cube, dt=1.e-5, mu=1.0):
+class use_opt():
+    def __init__(self, PF, boundary, dt=1.e-5, mu=1.0,**kwargs):
         self.dt = dt
         self.mu = mu
         self.iter = 0
-        self.print_epoch = 100
+        self.print_epoch = kwargs.get('print_epoch', 100)
         self.wall_time = 0
-        
+
+        b_cube = PF
+        b_cube[:,:,:,0] = boundary
         self.is_tensor = isinstance(b_cube, torch.Tensor)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.b_cube = (b_cube if self.is_tensor else torch.from_numpy(b_cube)).to(self.device)      
-        self.boundary = (b_cube[:,:,:,0] if self.is_tensor else torch.from_numpy(b_cube[:,:,:,0]))
+        self.b_cube = b_cube 
+        self.boundary = boundary
         
         self.L_list = []
         self.fi_list = []
@@ -154,7 +157,7 @@ class use_mf():
             grad(cube_dot(Omega,b_cube))+Omega*divB+cube_dot(Omega,Omega)*b_cube    
         return F
     
-    def RK45_mf(self,b_cube, dt, mu):
+    def RK45_opt(self,b_cube, dt, mu):
         x = b_cube
         F1 = self.return_F(x)
         F2 = self.return_F(x+0.5*F1*dt*mu)
@@ -164,38 +167,63 @@ class use_mf():
         dB = mu*dt*F
         return x+dB
         
-    def mf_module(self, max_step = 1e4):
+    def opt_iteration(self, max_step = 1e4, **kwargs):
+        dt = kwargs.get('dt', self.dt)
+        mu = kwargs.get('mu', self.mu)
+        NP = kwargs.get('print_epoch', self.print_epoch)
+        IP = kwargs.get('is_print',True)
         first = True
         start_iter = self.iter
         if start_iter == 0:
             self.wall_time = 0
         start_time = time.time()
         if not self.is_tensor:
-            self.b_cube = torch.tensor(self.b_cube).clone().detach().to(self.device)
-        dt = self.dt
-        mu = self.mu
-        B = self.b_cube
+            B = torch.from_numpy(self.b_cube).to(self.device)
+            boundary = torch.from_numpy(self.boundary).to(self.device)
+        else:
+            B = self.b_cube.to(self.device)
+            boundary = self.boundary.to(self.device)
         
         for i in range(max_step):
-            B = self.RK45_mf(B, dt, mu)
+            self.iter+=1
+            B = self.RK45_opt(B, dt, mu)
             fi, sigma_J, L = evaluate(B)
             self.fi_list.append(fi)
             self.sigmaJ_list.append(sigma_J)
             self.L_list.append(L/self.L0)
-            self.wall_time+=time.time()-start_time
-            if self.iter % self.print_epoch ==0 or first:
-                print('iter: %05d/%05d, fi: %.4e, sigma_J: %.4e, L:%.4e, wall_time: %.4e' % 
-                      (self.iter, max_step+start_iter, fi, sigma_J, L, self.wall_time))
+            B[:,:,:,0] = boundary
+            if IP and (self.iter % NP==0 or first or i==max_step-1):
+                self.wall_time=time.time()-start_time
+                print('iter: %05d/%05d, fi: %.4e, sigma_J: %.4e, L:%.4e, wall_time: %8.3f min' % 
+                      (self.iter, max_step+start_iter, fi, sigma_J, L, self.wall_time/50))
                 first = False
-            self.iter+=1
 
-            
-        progress_bar.close()
+        B = B if self.is_tensor else B.detach().cpu().numpy()
+        return B
+
+    def plot_optmization(self):
+        plt.plot(self.fi_list, label='r$\langle |f_i|\rangle$',c='C0')
+        plt.ylabel(r'$\langle |f_i|\rangle$', color='C0')
+        plt.yscale('log')
+        plt.gca().tick_params('y', colors='C0')
+        ax1 = plt.gca()
+        ax1.spines['left'].set_color('C0')
+        for tick in ax1.yaxis.get_major_ticks():
+            tick.label1.set_color('C0')
+        for tick in ax1.yaxis.get_minor_ticks():
+            tick.label1.set_color('C0')
         
-    def __call__(self):
-        ret = self.RK45_mf(self.b_cube, self.dt, self.mu)
-        ret[:,:,:,0] = self.boundary
-        ret = (ret if self.is_tensor else ret.detach().cpu().numpy())
+        ax2 = ax1.twinx()
+        plt.plot(self.sigmaJ_list, label=r'$\sigma_J$', c='C1')
+        plt.ylabel(r'$\sigma_J$', color='C1')
+        plt.gca().tick_params('y', colors='C1')
+        for tick in ax2.yaxis.get_major_ticks():
+            tick.label1.set_color('C1')
+        for tick in ax2.yaxis.get_minor_ticks():
+            tick.label1.set_color('C1')
+        
+    def __call__(self,**kwargs):
+        ret = self.opt_iteration(max_step=1,**kwargs)
         return ret
     
     
@@ -211,17 +239,17 @@ def jacobi_matrix(b_cube):
     elif not isinstance(b_cube, torch.Tensor):
         raise ValueError("Input must be a NumPy array or a PyTorch tensor.")
     
-    b_dx = torch.cat([(b_cube[:,-1:,:,:]-b_cube[:,-2:-1,:,:]),
+    b_dx = torch.cat([(b_cube[:,1:2,:,:]*4-b_cube[:,0:1,:,:]*3-b_cube[:,2:3,:,:])/2,
                       (b_cube[:,2:,:,:]-b_cube[:,:-2,:,:])/2,
-                      (b_cube[:,1:2,:,:]-b_cube[:,0:1,:,:])], dim=1)
+                      (b_cube[:,-1:,:,:]*3-b_cube[:,-2:-1,:,:]*4+b_cube[:,-3:-2,:,:])/2], dim=1)
     
-    b_dy = torch.cat([(b_cube[:,:,-1:,:]-b_cube[:,:,-2:-1,:]),
+    b_dy = torch.cat([(b_cube[:,:,1:2,:]*4-b_cube[:,:,0:1,:]*3-b_cube[:,:,2:3,:])/2,
                       ((b_cube[:,:,2:,:]-b_cube[:,:,:-2,:])/2),
-                      (b_cube[:,:,1:2,:]-b_cube[:,:,0:1,:])], dim=2)
+                      (b_cube[:,:,-1:,:]*3-b_cube[:,:,-2:-1,:]*4+b_cube[:,:,-3:-2,:])/2], dim=2)
     
-    b_dz = torch.cat([(b_cube[:,:,:,-1:]-b_cube[:,:,:,-2:-1]),
+    b_dz = torch.cat([(b_cube[:,:,:,1:2]*4-b_cube[:,:,:,0:1]*3-b_cube[:,:,:,2:3])/2,
                       ((b_cube[:,:,:,2:]-b_cube[:,:,:,:-2])/2),
-                      (b_cube[:,:,:,1:2]-b_cube[:,:,:,0:1])], dim=3)
+                      (b_cube[:,:,:,-1:]*3-b_cube[:,:,:,-2:-1]*4+b_cube[:,:,:,-3:-2])/2], dim=3)
     
     jacobi = torch.stack([b_dx, b_dy, b_dz], dim=1)
     return jacobi
@@ -229,9 +257,13 @@ def jacobi_matrix(b_cube):
 def rot(vec):
     jacobi = jacobi_matrix(vec)
     # rotB: (dBy/dz-dBz/dy, dBz/dx-dBx/dz, dBy/dx-dBx/dy)
+    # rotB: (dBz/dy-dBy/dz, dBx/dz-dBz/dx, dBy/dx-dBx/dy)
     rot_vec = torch.stack([jacobi[2,1]-jacobi[1,2],
                           jacobi[0,2]-jacobi[2,0],
                           jacobi[1,0]-jacobi[0,1]], dim=0)
+    # rot_vec = torch.stack([jacobi[1,2]-jacobi[2,1],
+    #                       jacobi[2,0]-jacobi[0,2],
+    #                       jacobi[1,0]-jacobi[0,1]], dim=0)
     
     if isinstance(vec, torch.Tensor):
         return rot_vec
