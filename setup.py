@@ -27,6 +27,16 @@ setup(
         'torchvision',
         'tqdm>=4.66.0',
     ],
+    extras_require={
+        'visual':[
+            'vtk>=9.6.0'
+            'opencv-python'
+        ],
+        'all':[
+            'vtk>=9.6.0',
+            'opencv-python'
+        ]
+    },
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
