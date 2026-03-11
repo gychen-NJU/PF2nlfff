@@ -3,11 +3,21 @@
 Physics-Reinforced Generative Adversarial Network (PRO-GAN) for extrapolation
 
 ## Installation
+Install the one with basic functions
 ```bash
 git clone git@git.nju.edu.cn:gychen/PF2nlfff.git
 cd PF2nlfff
 pip install .
 ```
+To install the one with additional visualization module, please run
+```bash
+pip install .[visual]
+```
+Or install the version with full module
+```bash
+pip install .[all]
+```
+
 
 ## Usage
 ### Load the samples
@@ -51,9 +61,20 @@ from PF2nlfff import extrapolation
 ```
 Then use `extrapolation.PF` to perform potential extrapolation, `extrapolation.nlfff` to perform NLFFF extrapolation.
 
+### Visualization
+When install with `pip install .[visual]` or `pip install .[all]`, users can renders the 3D field by:
+```python
+from PF2nlfff.utils.visual import BcubeRen
+BcubeRen(bucbe, out_dir='./LL/')
+```
+This will generate a series of 3D field images in the `out_dir` directory.
+Under the [examples](examples/) folder you can find a examples of 3d volume render.  
+![3d volume render](examples/model.vs.NN.png)
 
-## Authors and acknowledgment
+## Authors
 Guoyin Chen -- [gychen@smail.nju.edu.cn](mailto:gychen@smail.nju.edu.cn)
+Yang Guo    -- [guoyang@nju.edu.cn](mailto:guoyang@nju.edu.cn)
+Qi Hao      -- [haoqi@nju.edu.cn](mailto:haoqi@nju.edu.cn)
 
 ## License
 This project is licensed under the MIT License. Please refer to the [LICENSE](LICENSE) file for details.
