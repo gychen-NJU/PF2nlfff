@@ -72,8 +72,8 @@ Under the [examples](examples/) folder you can find a examples of 3d volume rend
 ![3d volume render](examples/model.vs.NN.png)
 
 ## Authors
-Guoyin Chen -- [gychen@smail.nju.edu.cn](mailto:gychen@smail.nju.edu.cn)
-Yang Guo    -- [guoyang@nju.edu.cn](mailto:guoyang@nju.edu.cn)
+Guoyin Chen -- [gychen@smail.nju.edu.cn](mailto:gychen@smail.nju.edu.cn)<br>
+Yang Guo    -- [guoyang@nju.edu.cn](mailto:guoyang@nju.edu.cn)<br>
 Qi Hao      -- [haoqi@nju.edu.cn](mailto:haoqi@nju.edu.cn)
 
 ## License
