@@ -7,7 +7,7 @@ Physics-Reinforced Generative Adversarial Network (PRO-GAN) for extrapolation
 ## Installation
 Install the one with basic functions
 ```bash
-git clone git@git.nju.edu.cn:gychen/PF2nlfff.git
+git clone git@github.com:gychen-NJU/PF2nlfff.git
 cd PF2nlfff
 pip install .
 ```
