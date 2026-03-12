@@ -2,6 +2,8 @@
 
 Physics-Reinforced Generative Adversarial Network (PRO-GAN) for extrapolation
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18972720.svg)](https://doi.org/10.5281/zenodo.18972720)
+
 ## Installation
 Install the one with basic functions
 ```bash
