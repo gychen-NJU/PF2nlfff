@@ -4,6 +4,8 @@ Physics-Reinforced Generative Adversarial Network (PRO-GAN) for extrapolation
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18972720.svg)](https://doi.org/10.5281/zenodo.18972720)
 
+The design, test, and application of PRO-GAN can be found in [this paper](https://ui.adsabs.harvard.edu/abs/2026ApJ..1001...96C).
+
 ## Installation
 Install the one with basic functions
 ```bash
